@@ -31,7 +31,7 @@ public class My_button implements Collidable {
   }
   
   void display(){
-    textSize(60);
+    textSize(24);
     strokeWeight(4);
     if (click){
       fill(255,255,255);

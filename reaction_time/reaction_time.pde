@@ -5,9 +5,16 @@ PFont dkCrayonCrumble;
 PFont neoteric;
 PFont primetime;
 PFont trench100;
+PFont goth;
 
 SoundFile title_wav;
 String titleName = "sounds/title.wav";
+
+SoundFile react_wav;
+String reactName;
+
+SoundFile alert_wav;
+String alertName = "sounds/Alert.wav";
 
 SoundFile hover_wav;
 boolean hover_once = true;
@@ -61,8 +68,21 @@ final int EXIT_H_0 = 39;
 PImage bgImage;
 PImage exclamation;
 
+boolean react_s = false;
+boolean react_trans = false;
+int opacity = 255;
+
+int react_iter = 5;
+boolean react_game_start = false;
+boolean reacted = false;
+int exclamation_timer;
+int reacted_timer = -1;
+
+int start_time;
+int end_time;
+float latency = 0.03;
+
 void setup() {
-  frameRate(100);
   fullScreen();
   RB_X_0 = displayWidth/2;
   RB_Y_0 = displayHeight/2-90;
@@ -79,6 +99,7 @@ void setup() {
   neoteric = createFont("fonts/NEOTERIC.ttf",69);
   primetime = createFont("fonts/PRIMETIME.ttf",69);
   trench100 = createFont("fonts/trench100.ttf",69);
+  goth = createFont("Georgia",69);
   title_wav = new SoundFile(this, titleName);
   hover_wav = new SoundFile(this, selectName);
   click_wav = new SoundFile(this, clickName);
@@ -87,40 +108,23 @@ void setup() {
   buttons.add(new My_button("TEST CONTROL",FB_X_0,FB_Y_0,FB_W_0,FB_H_0,255,255,255,2));
   buttons.add(new My_button("TEST MEMORY",PB_X_0,PB_Y_0,PB_W_0,PB_H_0,255,255,255,3));
   buttons.add(new My_button("EXIT", EXIT_X_0, EXIT_Y_0, EXIT_W_0, EXIT_H_0, 255,255,255,-2));
-  title_wav.play(1,0.2);
+  title_wav.play(1,0.05);
 }
 
 void draw() {
-  if (mode == 0) {
-    changeDiff();
-    displayMenu();
-    checkHoverMode0();
-  } else if (mode == 1) {
-    setupReact();
+  if (mode == 1) {
     displayReact();
   } else if (mode == 2) {
   } else if (mode == 3) {
+  } else if (mode == 0) {
+    changeDiff();
+    displayMenu();
+    checkHoverMode0();
   } else if (mode == -2) {
     exit();
   }
   changeMode(tmp_mode);
 
-}
-
-void checkClickMode0() {
-  int c;
-  for (int i = 0; i < 4; i++) {
-    c = buttons.get(i).checkMouseClick(mouseX,mouseY);  
-    if (c > 0) {
-      click_wav.play();
-      tmp_mode = c;
-      changeMode = true;
-      title_wav.stop();
-    } if (c == -2) {
-      tmp_mode = -2;
-      changeMode = true;
-    }
-  }
 }
 
 void changeDiff(){
@@ -186,22 +190,6 @@ void changeDiff(){
   }
 }
 
-void checkHoverMode0() {
-  boolean check = true;
-  for (int i = 0; i < 4; i++) {
-    
-    if (buttons.get(i).checkMouseHover(mouseX,mouseY) > 0){
-      if (!hover_once) {
-        hover_wav.play();
-      }
-      check = false;
-    }
-    
-  }
-  if (!check) hover_once = true;
-  else hover_once = false;
-}
-
 int t(int t1, int t2, int current, int total){
   return t1 + current*((t2-t1)/total);
 }
@@ -214,14 +202,18 @@ void changeMode(int c) {
     } 
     if (changeMode_trans == 60) {
       mode = c;
+      if (mode == 1) {
+        react_wav.play(1,0.05);
+      }  
     }
     if (changeMode_trans > 60 && changeMode_trans < 120) {
       fill(0,255+5*(60-changeMode_trans));
       rect(width/2,height/2,width, height);
     }
-    if (changeMode_trans == 120) {
+    if (changeMode_trans >= 120) {
       changeMode = false;
       changeMode_trans = 0;
+      
     }
     changeMode_trans++;
   }
@@ -240,25 +232,117 @@ void displayMenu(){
 }  
 
 void setupReact(){
-  if (diff == 0) { bgImage = loadImage("sprites/react_background_easy.png"); exclamation = loadImage("sprites/big_react_1.png"); }
-  if (diff == 1) { bgImage = loadImage("sprites/react_background_medium.png"); exclamation = loadImage("sprites/big_react_2.png"); }
-  if (diff == 2) { bgImage = loadImage("sprites/react_background_hard.png"); exclamation = loadImage("sprites/big_react_3.png"); }
-  
-  
+  if (diff == 0) { bgImage = loadImage("sprites/react_background_easy.png"); exclamation = loadImage("sprites/big_react_1.png"); reactName = "sounds/7PM.wav"; }
+  if (diff == 1) { bgImage = loadImage("sprites/react_background_medium.png"); exclamation = loadImage("sprites/big_react_2.png"); reactName = "sounds/11PM.wav"; }
+  if (diff == 2) { bgImage = loadImage("sprites/react_background_hard.png"); exclamation = loadImage("sprites/big_react_3.png"); reactName = "sounds/1AM.wav"; }
+  react_wav = new SoundFile(this,reactName);
+  alert_wav = new SoundFile(this,alertName);
 }
 
-void mousePressed() {
-  if (mode == 1) {
-    displayReact();
-  }  
-  if (mode == 0) {
-    checkClickMode0();
+void react_bg(){
+  clear();
+  imageMode(CENTER);
+  tint(255,opacity);
+  image(bgImage,width/2,height/2,(1024.0/888.0)*height,height);
+  if (react_trans == true && opacity > 128) opacity -= 16;
+  else react_trans = false;
+}
+  
+void react_game(){
+  if (react_game_start || (!react_game_start && reacted_timer >= 0)) {
+    if (exclamation_timer == 0) {
+      tint(255,255);
+      image(exclamation,width/2+(40-random(80)),height/2+(40-random(80)));
+      alert_wav.play();
+      start_time = millis();
+    } else if (exclamation_timer < 0 && !reacted) {
+      image(exclamation,width/2+(40-random(80)),height/2+(40-random(80)));
+    } else if (reacted && reacted_timer > 0) {
+      String reaction_time = String.valueOf(end_time-start_time-latency) + " ms";
+      textFont(goth);
+      textMode(CENTER);
+      text(reaction_time,width/2,height/2);
+      reacted_timer -= 1;
+    } else if (reacted_timer == 0) {
+      reacted = false;
+      react_s = false;
+    }
+    exclamation_timer -= 1;
   }
 }
 
 void displayReact(){
-  imageMode(CENTER);
-  image(bgImage,width/2,height/2,(1024.0/888.0)*height,height);
+  react_bg();
+  react_game();
+}
+
+void checkHoverMode0() {
+  boolean check = true;
+  for (int i = 0; i < 4; i++) {
+    
+    if (buttons.get(i).checkMouseHover(mouseX,mouseY) > 0){
+      if (!hover_once) {
+        hover_wav.play();
+      }
+      check = false;
+    }
+    
+  }
+  if (!check) hover_once = true;
+  else hover_once = false;
+}
+
+void checkClickMode0() {
+  int c;
+  for (int i = 0; i < 4; i++) {
+    c = buttons.get(i).checkMouseClick(mouseX,mouseY);  
+    if (c > 0) {
+      click_wav.play();
+      tmp_mode = c;
+      changeMode = true;
+      title_wav.stop();
+    }
+    if (c == 1) {
+      setupReact();
+    }
+    if (c == -2) {
+      tmp_mode = -2;
+      changeMode = true;
+    }
+  }
+}
+
+void checkClickMode1(){
+  if (react_game_start) {
+      if (exclamation_timer > 0) {
+        exclamation_timer += 30;
+      } else {
+        fill(255);
+        rectMode(CENTER);
+        rect(width/2,height/2,width,height);
+        reacted = true;
+        reacted_timer = 60;
+        opacity = 255;
+        react_game_start = false;
+      }
+    }
+    if (!react_s && !changeMode){
+      react_s = true;
+      react_trans = true;
+      react_game_start = true;
+      exclamation_timer = (int)random(float(45)) + 30;
+      react_wav.stop();
+    }
+}
+
+void mousePressed() {
+  end_time = millis();
+  if (mode == 1) {
+    checkClickMode1();
+  }  
+  if (mode == 0) {
+    checkClickMode0();
+  }
 }
 
 void mouseReleased(MouseEvent event) {
